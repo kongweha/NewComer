@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>วอลเลย์บอลตัวจิ๋ว</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  font-family: system-ui, sans-serif;
+  color: #16324f;
+  background: #eaf5ff;
+}
+body {
+  margin: 0;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+button, select, input { font: inherit; }
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 16px;
+  background: #176de5;
+  color: white;
+  font-weight: 700;
+}
+button:disabled { opacity: .5; cursor: default; }
+button.secondary { background: #e4edfa; color: #16324f; }
+button:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 3px solid #ffad28;
+  outline-offset: 3px;
+}
+.app { max-width: 1050px; margin: auto; }
+header, .toolbar, .scoreboard, .controls, .group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+header { flex-wrap: wrap; margin-bottom: 12px; }
+h1 { font-size: clamp(20px, 4vw, 30px); margin: 0; }
+.subtitle { font-size: 13px; margin: 5px 0 0; color: #536b82; }
+.toolbar { flex-wrap: wrap; justify-content: flex-end; }
+.scoreboard {
+  background: white;
+  border-radius: 15px;
+  padding: 10px 18px;
+  margin-bottom: 10px;
+}
+.score { font-size: 30px; font-weight: 900; }
+.player { text-align: center; min-width: 85px; }
+.player small { display: block; font-size: 12px; }
+#status { text-align: center; font-weight: 700; }
+.court {
+  position: relative;
+  border: 4px solid white;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 35px #254c7420;
+  background: #8fdaff;
+}
+canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.controls {
+  margin: 12px 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.group { justify-content: flex-start; }
+.touch {
+  width: clamp(58px, 11vw, 84px);
+  height: 60px;
+  padding: 0;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  background: #163f73;
+  box-shadow: 0 4px 0 #082647;
+}
+.touch.hit { background: #e97522; box-shadow: 0 4px 0 #9d4200; }
+.touch.active { transform: translateY(3px); box-shadow: none; }
+details {
+  margin-top: 16px;
+  background: white;
+  border-radius: 15px;
+  padding: 14px;
+}
+summary { cursor: pointer; font-weight: 700; }
+.settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.field { display: grid; gap: 7px; min-width: 0; }
+.field input[type=file] { width: 100%; font-size: 12px; }
+.field select {
+  padding: 8px;
+  border: 1px solid #b4c7da;
+  border-radius: 8px;
+  background: white;
+}
+.hint, #notice { font-size: 13px; line-height: 1.7; color: #536b82; }
+#notice { min-height: 22px; color: #11634a; }
+.settings-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 560px) {
+  body { padding: 8px; }
+  .toolbar button { padding: 9px 12px; font-size: 13px; }
+  .scoreboard { padding: 8px; }
+  .score { font-size: 25px; }
+  #status { font-size: 12px; }
+  .settings { grid-template-columns: 1fr; }
+  .touch { height: 58px; }
+}
+@media (max-height: 550px) and (orientation: landscape) {
+  body { padding: 5px; }
+  .app { max-width: 760px; }
+  header { margin-bottom: 5px; }
+  h1 { font-size: 18px; }
+  .subtitle { display: none; }
+  .scoreboard { padding: 3px 12px; margin-bottom: 5px; }
+  .score { font-size: 22px; }
+  .court { max-width: 660px; margin: auto; }
+  .controls { margin: 6px 0; }
+  .touch { height: 44px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>🏐 วอลเลย์บอลตัวจิ๋ว</h1>
+      <p class="subtitle">เลือกตัวละครของคุณ แล้วกระโดดตีลูกให้ข้ามตาข่าย!</p>
+    </div>
+    <div class="toolbar">
+      <button id="start">เริ่มเกม</button>
+      <button id="pause" class="secondary" disabled>พักเกม</button>
+    </div>
+  </header>
+
+  <div class="scoreboard">
+    <div class="player">
+      <small>คุณ</small>
+      <span class="score" id="scoreLeft">0</span>
+    </div>
+    <div id="status" aria-live="polite">พร้อมลงสนามไหม?</div>
+    <div class="player">
+      <small>คู่แข่ง AI</small>
+      <span class="score" id="scoreRight">0</span>
+    </div>
+  </div>
+
+  <div class="court">
+    <canvas id="game" aria-label="สนามวอลเลย์บอล"></canvas>
+  </div>
+
+  <div class="controls" aria-label="ปุ่มควบคุมเกม">
+    <div class="group">
+      <button class="touch" data-action="left" aria-label="ซ้าย">◀</button>
+      <button class="touch" data-action="right" aria-label="ขวา">▶</button>
+    </div>
+    <div class="group">
+      <button class="touch" data-action="jump">กระโดด</button>
+      <button class="touch hit" data-action="hit">ตีลูก</button>
+    </div>
+  </div>
+
+  <p class="hint">
+    คอมพิวเตอร์: A/D หรือ ←/→ เดิน · W หรือ ↑ กระโดด · Space ตีลูก · P พัก<br>
+    มือถือ: กดปุ่มด้านบนพร้อมกันได้ · หมุนแนวนอนเพื่อเห็นสนามกว้างขึ้น
+  </p>
+
+  <details id="settingsPanel">
+    <summary>⚙️ ตั้งค่า / เลือกภาพตัวละคร</summary>
+    <div class="settings">
+      <label class="field">
+        ภาพตัวละครของคุณ
+        <input id="imageLeft" type="file"
+               accept="image/png,image/webp,image/jpeg">
+        <span class="hint">แนะนำ PNG โปร่งใส ตัวละครหันขวา</span>
+      </label>
+
+      <label class="field">
+        ภาพคู่แข่ง AI
+        <input id="imageRight" type="file"
+               accept="image/png,image/webp,image/jpeg">
+        <span class="hint">หากไม่เลือก จะใช้ภาพเดียวกับคุณแล้วกลับด้าน</span>
+      </label>
+
+      <label class="field">
+        ขนาดภาพตัวละคร
+        <input id="imageScale" type="range"
+               min="0.7" max="1.6" step="0.05" value="1">
+      </label>
+
+      <label class="field">
+        ระดับคู่แข่ง
+        <select id="difficulty">
+          <option value="easy">ง่าย</option>
+          <option value="normal" selected>ปานกลาง</option>
+          <option value="hard">ยาก</option>
+        </select>
+      </label>
+
+      <label class="field">
+        คะแนนชนะ
+        <select id="target">
+          <option value="5">5 คะแนน</option>
+          <option value="11" selected>11 คะแนน</option>
+          <option value="15">15 คะแนน</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="settings-actions">
+      <button id="download">ดาวน์โหลดเกมพร้อมภาพ</button>
+      <button id="resetImages" class="secondary">ใช้ตัวละครเริ่มต้น</button>
+    </div>
+    <p id="notice" role="status"></p>
+    <p class="hint">
+      ภาพประมวลผลภายในเบราว์เซอร์ ไม่มีโค้ดส่งภาพไปเซิร์ฟเวอร์
+      เมื่อเลือกภาพแล้ว กดดาวน์โหลดเพื่อเก็บเกมพร้อมภาพใน HTML ไฟล์เดียว
+    </p>
+  </details>
+</div>
+
+<!-- ภาพและค่าตั้งค่าที่บันทึกไว้จะอยู่ในส่วนนี้ -->
+<script id="savedConfig" type="application/json">
+{"left":"","right":"","scale":1,"difficulty":"normal","target":11}
+</script>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+  const canvas = $("game");
+  const ctx = canvas.getContext("2d");
+
+  const W = 960;
+  const H = 540;
+  const FLOOR = 450;
+  const NET = { x: 474, y: 288, w: 12, h: 162 };
+  const GRAVITY = 1200;
+  const DT = 1 / 120;
+
+  const config = {
+    left: "", right: "", scale: 1,
+    difficulty: "normal", target: 11,
+    ...JSON.parse($("savedConfig").textContent)
+  };
+
+  $("imageScale").value = config.scale;
+  $("difficulty").value = config.difficulty;
+  $("target").value = config.target;
+
+  let leftImage = null;
+  let rightImage = null;
+  let mode = "ready";
+  let score = [0, 0];
+  let roundDelay = 0;
+  let server = 0;
+  let elapsed = 0;
+  let aiDecision = 0;
+  let aiTarget = 730;
+  let aiError = 0;
+
+  const keyboard = new Set();
+  const pointers = new Map();
+
+  const makePlayer = (x, side) => ({
+    x, y: FLOOR - 36,
+    vx: 0, vy: 0,
+    r: 36, side,
+    grounded: true,
+    cooldown: 0,
+    flash: 0
+  });
+
+  const players = [
+    makePlayer(225, 0),
+    makePlayer(735, 1)
+  ];
+
+  const ball = {
+    x: 225, y: 210,
+    vx: 0, vy: 0,
+    r: 17,
+    spin: 0
+  };
+
+  const levels = {
+    easy:   { speed: 215, interval: .30, error: 90, jump: 155 },
+    normal: { speed: 280, interval: .16, error: 45, jump: 175 },
+    hard:   { speed: 325, interval: .09, error: 18, jump: 195 }
+  };
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = canvas.clientWidth;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(width * 9 / 16 * dpr);
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+
+  function setStatus(text) {
+    $("status").textContent = text;
+  }
+
+  function updateScore() {
+    $("scoreLeft").textContent = score[0];
+    $("scoreRight").textContent = score[1];
+  }
+
+  function clearInput() {
+    keyboard.clear();
+    pointers.clear();
+    document.querySelectorAll(".touch").forEach(button => {
+      button.classList.remove("active");
+    });
+  }
+
+  function held(action) {
+    const keys = {
+      left: ["KeyA", "ArrowLeft"],
+      right: ["KeyD", "ArrowRight"],
+      jump: ["KeyW", "ArrowUp"],
+      hit: ["Space"]
+    };
+
+    return keys[action].some(key => keyboard.has(key)) ||
+      [...pointers.values()].includes(action);
+  }
+
+  function resetRound() {
+    players[0] = makePlayer(225, 0);
+    players[1] = makePlayer(735, 1);
+
+    ball.x = server === 0 ? 225 : 735;
+    ball.y = 185;
+    ball.vx = server === 0 ? 120 : -120;
+    ball.vy = -80;
+
+    aiDecision = 0;
+    aiTarget = 730;
+    roundDelay = 1.0;
+  }
+
+  function startGame() {
+    clearInput();
+    score = [0, 0];
+    server = 0;
+    mode = "playing";
+    updateScore();
+    resetRound();
+
+    $("start").textContent = "เริ่มใหม่";
+    $("pause").disabled = false;
+    $("pause").textContent = "พักเกม";
+    $("settingsPanel").open = false;
+    setStatus("เตรียมรับลูก!");
+  }
+
+  function togglePause() {
+    if (mode === "playing") {
+      mode = "paused";
+      clearInput();
+      $("pause").textContent = "เล่นต่อ";
+      setStatus("พักเกม");
+    } else if (mode === "paused") {
+      mode = "playing";
+      $("pause").textContent = "พักเกม";
+      setStatus("เล่นต่อ!");
+    }
+  }
+
+  $("start").addEventListener("click", startGame);
+  $("pause").addEventListener("click", togglePause);
+
+  const gameKeys = [
+    "KeyA", "KeyD", "KeyW",
+    "ArrowLeft", "ArrowRight", "ArrowUp",
+    "Space", "KeyP"
+  ];
+
+  window.addEventListener("keydown", event => {
+    const tag = event.target.tagName;
+    if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(tag)) return;
+    if (!gameKeys.includes(event.code)) return;
+
+    if (mode === "playing" || mode === "paused") {
+      event.preventDefault();
+      if (event.code === "KeyP") {
+        if (!event.repeat) togglePause();
+      } else {
+        keyboard.add(event.code);
+      }
+    }
+  });
+
+  window.addEventListener("keyup", event => {
+    keyboard.delete(event.code);
+  });
+
+  document.querySelectorAll(".touch").forEach(button => {
+    button.addEventListener("pointerdown", event => {
+      event.preventDefault();
+      if (mode !== "playing") return;
+      button.setPointerCapture(event.pointerId);
+      pointers.set(event.pointerId, button.dataset.action);
+      button.classList.add("active");
+    });
+
+    const release = event => {
+      pointers.delete(event.pointerId);
+      const stillHeld = [...pointers.values()].includes(button.dataset.action);
+      button.classList.toggle("active", stillHeld);
+    };
+
+    button.addEventListener("pointerup", release);
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("lostpointercapture", release);
+    button.addEventListener("contextmenu", event => event.preventDefault());
+  });
+
+  function loseFocus() {
+    clearInput();
+    if (mode === "playing") togglePause();
+  }
+
+  window.addEventListener("blur", loseFocus);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) loseFocus();
+  });
+
+  function movePlayer(p, direction, jump, dt, speed = 325) {
+    p.vx = direction * speed;
+
+    if (jump && p.grounded) {
+      p.vy = -650;
+      p.grounded = false;
+    }
+
+    p.vy += GRAVITY * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+
+    const minX = p.side === 0 ? p.r : NET.x + NET.w + p.r;
+    const maxX = p.side === 0 ? NET.x - p.r : W - p.r;
+    p.x = Math.max(minX, Math.min(maxX, p.x));
+
+    if (p.y + p.r >= FLOOR) {
+      p.y = FLOOR - p.r;
+      p.vy = 0;
+      p.grounded = true;
+    }
+
+    p.cooldown = Math.max(0, p.cooldown - dt);
+    p.flash = Math.max(0, p.flash - dt);
+  }
+
+  function ballDistance(p) {
+    return Math.hypot(ball.x - p.x, ball.y - p.y);
+  }
+
+  function smash(p) {
+    if (p.cooldown > 0 || ballDistance(p) > p.r + ball.r + 42) return;
+
+    const direction = p.side === 0 ? 1 : -1;
+    ball.vx = direction * 620;
+    ball.vy = p.y < FLOOR - 80 ? 140 : -540;
+
+    // ขยับลูกออกจากตัวละคร ป้องกันการชนซ้ำในทันที
+    const dx = ball.x - p.x;
+    const dy = ball.y - p.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const separation = p.r + ball.r + 3;
+    ball.x = p.x + dx / distance * separation;
+    ball.y = p.y + dy / distance * separation;
+
+    p.cooldown = .48;
+    p.flash = .18;
+  }
+
+  function collidePlayer(p) {
+    let dx = ball.x - p.x;
+    let dy = ball.y - p.y;
+    let distance = Math.hypot(dx, dy);
+    const limit = p.r + ball.r;
+
+    if (distance >= limit) return;
+
+    if (distance < .001) {
+      dx = 0;
+      dy = -1;
+      distance = 1;
+    }
+
+    const nx = dx / distance;
+    const ny = dy / distance;
+
+    ball.x = p.x + nx * (limit + .5);
+    ball.y = p.y + ny * (limit + .5);
+
+    const relative =
+      (ball.vx - p.vx) * nx +
+      (ball.vy - p.vy) * ny;
+
+    if (relative < 0) {
+      ball.vx -= 1.7 * relative * nx;
+      ball.vy -= 1.7 * relative * ny;
+      ball.vx += p.vx * .15;
+
+      // ชนด้านบนตัวละครแล้วส่งลูกขึ้น
+      if (ny < -.2) {
+        ball.vy = Math.min(ball.vy, -460);
+      }
+    }
+  }
+
+  function collideNet() {
+    const nearestX = Math.max(NET.x, Math.min(ball.x, NET.x + NET.w));
+    const nearestY = Math.max(NET.y, Math.min(ball.y, FLOOR));
+
+    let dx = ball.x - nearestX;
+    let dy = ball.y - nearestY;
+    let distance = Math.hypot(dx, dy);
+
+    if (distance >= ball.r) return;
+
+    let nx, ny, penetration;
+
+    if (distance > .001) {
+      nx = dx / distance;
+      ny = dy / distance;
+      penetration = ball.r - distance;
+    } else {
+      const left = Math.abs(ball.x - NET.x);
+      const right = Math.abs(NET.x + NET.w - ball.x);
+      const top = Math.abs(ball.y - NET.y);
+
+      if (top <= left && top <= right) {
+        nx = 0; ny = -1;
+        penetration = ball.r + top;
+      } else {
+        nx = left < right ? -1 : 1;
+        ny = 0;
+        penetration = ball.r + Math.min(left, right);
+      }
+    }
+
+    ball.x += nx * (penetration + .5);
+    ball.y += ny * (penetration + .5);
+
+    const velocity = ball.vx * nx + ball.vy * ny;
+    if (velocity < 0) {
+      ball.vx -= 1.8 * velocity * nx;
+      ball.vy -= 1.8 * velocity * ny;
+    }
+  }
+
+  function awardPoint(winner) {
+    score[winner]++;
+    updateScore();
+    clearInput();
+
+    if (score[winner] >= config.target) {
+      mode = "over";
+      $("pause").disabled = true;
+      setStatus(winner === 0 ? "🎉 คุณชนะ!" : "AI ชนะ ลองอีกครั้ง!");
+      return;
+    }
+
+    server = winner;
+    resetRound();
+    setStatus(winner === 0 ? "คุณได้คะแนน!" : "AI ได้คะแนน!");
+  }
+
+  // คาดจุดตกแบบคร่าว ๆ โดยเผื่อความคลาดเคลื่อนตามระดับ
+  function predictLanding() {
+    const targetY = FLOOR - 65;
+    const discriminant =
+      ball.vy * ball.vy + 2 * GRAVITY * (targetY - ball.y);
+
+    if (discriminant < 0) return ball.x;
+
+    const time = Math.max(0,
+      (-ball.vy + Math.sqrt(discriminant)) / GRAVITY);
+
+    let x = ball.x + ball.vx * Math.min(time, 1.5);
+
+    // สะท้อนตำแหน่งคาดการณ์จากขอบสนาม
+    const span = W - 2 * ball.r;
+    const wrapped = ((x - ball.r) % (2 * span) + 2 * span) % (2 * span);
+    x = ball.r + (wrapped <= span ? wrapped : 2 * span - wrapped);
+
+    return x;
+  }
+
+  function update(dt) {
+    elapsed += dt;
+    if (mode !== "playing") return;
+
+    if (roundDelay > 0) {
+      roundDelay -= dt;
+      if (roundDelay <= 0) setStatus("ตีลูกให้ข้ามตาข่าย!");
+      return;
+    }
+
+    const human = players[0];
+    const ai = players[1];
+    const level = levels[config.difficulty] || levels.normal;
+
+    movePlayer(
+      human,
+      Number(held("right")) - Number(held("left")),
+      held("jump"),
+      dt
+    );
+
+    aiDecision -= dt;
+    if (aiDecision <= 0) {
+      aiDecision = level.interval;
+      aiError = (Math.random() * 2 - 1) * level.error;
+      aiTarget = ball.x > 430
+        ? predictLanding() + aiError
+        : 735;
+      aiTarget = Math.max(530, Math.min(915, aiTarget));
+    }
+
+    const aiDirection = Math.abs(aiTarget - ai.x) > 15
+      ? Math.sign(aiTarget - ai.x) : 0;
+
+    const aiJump =
+      ball.x > 470 &&
+      Math.abs(ball.x - ai.x) < 105 &&
+      ball.y < FLOOR - 55 &&
+      ball.y > FLOOR - level.jump &&
+      ball.vy > -220;
+
+    movePlayer(ai, aiDirection, aiJump, dt, level.speed);
+
+    ball.vy += GRAVITY * dt;
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+    ball.spin += ball.vx * dt / 55;
+
+    if (held("hit")) smash(human);
+
+    if (
+      ball.x > 495 &&
+      ballDistance(ai) < 88 &&
+      ball.y < ai.y + 15
+    ) {
+      smash(ai);
+    }
+
+    collidePlayer(human);
+    collidePlayer(ai);
+    collideNet();
+
+    if (ball.x < ball.r) {
+      ball.x = ball.r;
+      ball.vx = Math.abs(ball.vx) * .88;
+    }
+    if (ball.x > W - ball.r) {
+      ball.x = W - ball.r;
+      ball.vx = -Math.abs(ball.vx) * .88;
+    }
+    if (ball.y < ball.r) {
+      ball.y = ball.r;
+      ball.vy = Math.abs(ball.vy) * .8;
+    }
+
+    ball.vx = Math.max(-780, Math.min(780, ball.vx));
+    ball.vy = Math.max(-850, Math.min(850, ball.vy));
+
+    if (ball.y + ball.r >= FLOOR) {
+      awardPoint(ball.x < W / 2 ? 1 : 0);
+    }
+  }
+
+  function ellipse(x, y, rx, ry, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawCloud(x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ellipse(0, 0, 35, 16, "#ffffffd9");
+    ellipse(-20, 3, 22, 14, "#ffffffd9");
+    ellipse(20, 3, 25, 14, "#ffffffd9");
+    ellipse(-6, -12, 20, 18, "#ffffffd9");
+    ctx.restore();
+  }
+
+  function drawPlayer(p) {
+    const image = p.side === 0
+      ? leftImage
+      : (rightImage || leftImage);
+
+    const feet = p.y + p.r;
+    const airborne = FLOOR - feet;
+
+    ellipse(
+      p.x, FLOOR + 3,
+      Math.max(13, 33 - airborne * .07),
+      7,
+      "#29486a26"
+    );
+
+    ctx.save();
+    ctx.translate(p.x, feet);
+
+    const tilt = p.flash > 0
+      ? (p.side === 0 ? -.18 : .18)
+      : p.vx / 6000;
+
+    ctx.rotate(tilt);
+
+    if (p.side === 1) ctx.scale(-1, 1);
+
+    if (image) {
+      const height = 92 * config.scale;
+      const ratio = image.naturalWidth / image.naturalHeight;
+      let width = height * ratio;
+      let drawHeight = height;
+
+      if (width > 125 * config.scale) {
+        width = 125 * config.scale;
+        drawHeight = width / ratio;
+      }
+
+      ctx.drawImage(image, -width / 2, -drawHeight, width, drawHeight);
+    } else {
+      const color = p.side === 0 ? "#ffb849" : "#b69bff";
+
+      // ตัวละครสำรอง: แมวกลม
+      ellipse(-24, -7, 17, 9, color);
+      ellipse(24, -7, 17, 9, color);
+
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#283d58";
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+      ctx.moveTo(-29, -49);
+      ctx.lineTo(-29, -87);
+      ctx.lineTo(-8, -69);
+      ctx.lineTo(15, -70);
+      ctx.lineTo(33, -86);
+      ctx.lineTo(34, -47);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(0, -37, 37, 35, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ellipse(-9, -45, 3.5, 5, "#263950");
+      ellipse(17, -45, 3.5, 5, "#263950");
+      ellipse(-20, -32, 7, 4, "#f07883");
+      ellipse(25, -32, 7, 4, "#f07883");
+
+      ctx.beginPath();
+      ctx.moveTo(1, -32);
+      ctx.quadraticCurveTo(6, -24, 13, -32);
+      ctx.stroke();
+
+      ctx.fillStyle = p.side === 0 ? "#ed6c91" : "#5e69ce";
+      ctx.fillRect(-25, -18, 51, 15);
+    }
+
+    if (p.flash > 0) {
+      ctx.strokeStyle = "#fff4a3";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, -45, 52, -1.4, 1);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawBall() {
+    ellipse(ball.x, FLOOR + 3, 15, 4, "#29486a20");
+
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.spin);
+
+    ctx.fillStyle = "#fffef5";
+    ctx.strokeStyle = "#283d58";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, ball.r - 1, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.fillStyle = "#ff9861";
+    ctx.fillRect(-18, -6, 36, 12);
+    ctx.fillStyle = "#58a8f7";
+    ctx.fillRect(-5, -18, 10, 36);
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawOverlay(title, subtitle) {
+    ctx.fillStyle = "#102e55aa";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "white";
+    ctx.font = "bold 38px system-ui";
+    ctx.fillText(title, W / 2, 225);
+    ctx.font = "21px system-ui";
+    ctx.fillText(subtitle, W / 2, 270);
+  }
+
+  function draw() {
+    ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+
+    const sky = ctx.createLinearGradient(0, 0, 0, FLOOR);
+    sky.addColorStop(0, "#76caff");
+    sky.addColorStop(1, "#e1f7ff");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    drawCloud(140 + Math.sin(elapsed * .08) * 15, 90, 1.1);
+    drawCloud(755, 125, 1.3);
+    drawCloud(470, 60, .75);
+
+    ctx.fillStyle = "#76bf9c";
+    ctx.beginPath();
+    ctx.moveTo(0, 375);
+    ctx.quadraticCurveTo(150, 255, 350, 375);
+    ctx.quadraticCurveTo(620, 250, 960, 375);
+    ctx.lineTo(W, FLOOR);
+    ctx.lineTo(0, FLOOR);
+    ctx.fill();
+
+    ctx.fillStyle = "#9bd6b2";
+    ctx.fillRect(0, 390, W, FLOOR - 390);
+
+    ctx.fillStyle = "#f8d58e";
+    ctx.fillRect(0, FLOOR, W, H - FLOOR);
+
+    ctx.fillStyle = "#edbf72";
+    ctx.fillRect(0, FLOOR, W, 8);
+
+    ctx.strokeStyle = "#fff7dd";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(45, FLOOR + 22, W - 90, 42);
+    ctx.beginPath();
+    ctx.moveTo(W / 2, FLOOR + 22);
+    ctx.lineTo(W / 2, FLOOR + 64);
+    ctx.stroke();
+
+    // เสาตาข่าย
+    ctx.fillStyle = "#375778";
+    ctx.fillRect(NET.x, NET.y, NET.w, NET.h);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(NET.x - 2, NET.y, NET.w + 4, 8);
+
+    drawPlayer(players[0]);
+    drawPlayer(players[1]);
+    drawBall();
+
+    if (mode === "ready") {
+      drawOverlay("วอลเลย์บอลตัวจิ๋ว", "กดเริ่มเกม แล้วกระโดดตีลูกให้ข้ามตาข่าย");
+    } else if (mode === "paused") {
+      drawOverlay("พักเกม", "กดเล่นต่อ หรือกด P");
+    } else if (mode === "over") {
+      drawOverlay(
+        score[0] > score[1] ? "คุณชนะ! 🎉" : "คู่แข่งชนะ!",
+        "กดเริ่มใหม่เพื่อเล่นอีกครั้ง"
+      );
+    } else if (roundDelay > 0) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#173f67";
+      ctx.font = "bold 28px system-ui";
+      ctx.fillText("เตรียมรับลูก!", W / 2, 180);
+    }
+  }
+
+  function loadImage(source) {
+    return new Promise((resolve, reject) => {
+      if (!source) {
+        resolve(null);
+        return;
+      }
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("อ่านภาพไม่ได้"));
+      image.src = source;
+    });
+  }
+
+  async function chooseImage(event, side) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!["image/png", "image/webp", "image/jpeg"].includes(file.type)) {
+      $("notice").textContent = "กรุณาเลือก PNG, WebP หรือ JPEG";
+      return;
+    }
+
+    if (file.size > 12 * 1024 * 1024) {
+      $("notice").textContent = "กรุณาเลือกภาพขนาดไม่เกิน 12 MB";
+      return;
+    }
+
+    const input = event.target;
+    input.disabled = true;
+    $("download").disabled = true;
+    $("notice").textContent = "กำลังเตรียมภาพ…";
+
+    try {
+      const source = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const original = await loadImage(source);
+
+      // ย่อภาพเพื่อลดขนาดไฟล์ และคงพื้นหลังโปร่งใส
+      const ratio = Math.min(1,
+        640 / Math.max(original.naturalWidth, original.naturalHeight));
+
+      const buffer = document.createElement("canvas");
+      buffer.width = Math.max(1, Math.round(original.naturalWidth * ratio));
+      buffer.height = Math.max(1, Math.round(original.naturalHeight * ratio));
+      buffer.getContext("2d").drawImage(original, 0, 0, buffer.width, buffer.height);
+
+      const data = buffer.toDataURL("image/png");
+      const image = await loadImage(data);
+
+      config[side] = data;
+      if (side === "left") leftImage = image;
+      else rightImage = image;
+
+      $("notice").textContent =
+        "ใส่ภาพแล้ว กดดาวน์โหลดเกมพร้อมภาพเพื่อบันทึก";
+    } catch (error) {
+      $("notice").textContent = "เปิดภาพไม่ได้ กรุณาลองไฟล์อื่น";
+    } finally {
+      input.disabled = false;
+      $("download").disabled = false;
+    }
+  }
+
+  $("imageLeft").addEventListener("change", event => chooseImage(event, "left"));
+  $("imageRight").addEventListener("change", event => chooseImage(event, "right"));
+
+  $("imageScale").addEventListener("input", event => {
+    config.scale = Number(event.target.value);
+  });
+
+  $("difficulty").addEventListener("change", event => {
+    config.difficulty = event.target.value;
+    aiDecision = 0;
+  });
+
+  $("target").addEventListener("change", event => {
+    config.target = Number(event.target.value);
+    if (mode === "playing" || mode === "paused") {
+      mode = "ready";
+      clearInput();
+      $("pause").disabled = true;
+      $("pause").textContent = "พักเกม";
+      setStatus("เปลี่ยนคะแนนแล้ว กดเริ่มเกม");
+    }
+  });
+
+  $("resetImages").addEventListener("click", () => {
+    config.left = "";
+    config.right = "";
+    leftImage = rightImage = null;
+    $("imageLeft").value = "";
+    $("imageRight").value = "";
+    $("notice").textContent = "ใช้ตัวละครเริ่มต้นแล้ว";
+  });
+
+  $("download").addEventListener("click", () => {
+    const copy = document.documentElement.cloneNode(true);
+
+    // ฝังภาพจริงและค่าตั้งค่าใน HTML ที่ส่งออก
+    const safeJSON = JSON.stringify(config).replace(/</g, "\\u003c");
+    copy.querySelector("#savedConfig").textContent = safeJSON;
+
+    copy.querySelector("#scoreLeft").textContent = "0";
+    copy.querySelector("#scoreRight").textContent = "0";
+    copy.querySelector("#status").textContent = "พร้อมลงสนามไหม?";
+    copy.querySelector("#start").textContent = "เริ่มเกม";
+    copy.querySelector("#pause").textContent = "พักเกม";
+    copy.querySelector("#pause").disabled = true;
+    copy.querySelector("#notice").textContent = "";
+    copy.querySelector("#settingsPanel").removeAttribute("open");
+
+    copy.querySelectorAll(".touch").forEach(button => {
+      button.classList.remove("active");
+    });
+
+    const html = "<!DOCTYPE html>\n" + copy.outerHTML;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "index.html";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    $("notice").textContent =
+      "สร้างไฟล์แล้ว หากมีหน้าต่างดาวน์โหลด ให้บันทึก index.html";
+  });
+
+  async function restoreImages() {
+    try {
+      [leftImage, rightImage] = await Promise.all([
+        loadImage(config.left),
+        loadImage(config.right)
+      ]);
+    } catch {
+      $("notice").textContent = "โหลดภาพเดิมไม่ได้ ใช้ตัวละครสำรองแทน";
+    }
+  }
+
+  resetRound();
+  restoreImages();
+
+  let previousTime = 0;
+  let accumulator = 0;
+
+  function frame(time) {
+    if (!previousTime) previousTime = time;
+
+    const delta = Math.min((time - previousTime) / 1000, .05);
+    previousTime = time;
+    accumulator += delta;
+
+    while (accumulator >= DT) {
+      update(DT);
+      accumulator -= DT;
+    }
+
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
